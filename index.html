@@ -30,6 +30,20 @@ body {
   border-bottom: 1px solid #ddd;
 }
 
+.topbar-content {
+  display: flex;
+  gap: 24px;
+  align-items: center;
+  flex: 1;
+  flex-wrap: wrap;
+}
+
+.mobile-toggle,
+.mobile-categories-toggle,
+.categories-toggle {
+  display: none;
+}
+
 .controls {
   margin-left: auto;
 }
@@ -76,6 +90,10 @@ button:hover {
   justify-content: flex-start;
   margin-bottom: 20px;
   min-height: 20px;
+}
+
+.categories-panel {
+  display: block;
 }
 
 .rows {
@@ -277,30 +295,127 @@ button.active-level {
   80%  { transform: translateX(2px); }
   100% { transform: translateX(0); }
 }
+
+@media (max-width: 700px) {
+  .topbar {
+    gap: 8px;
+    align-items: flex-start;
+    margin: 8px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+  }
+
+  .mobile-toggle,
+  .mobile-categories-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    white-space: nowrap;
+  }
+
+  .mobile-toggle {
+    justify-content: center;
+    width: 26px;
+    min-width: 26px;
+    padding: 8px;
+  }
+
+  .topbar-content {
+    display: flex;
+    gap: 10px;
+    align-items: flex-start;
+    flex-direction: column;
+    flex-wrap: nowrap;
+  }
+
+  .topbar.is-collapsed .topbar-content {
+    display: none;
+  }
+
+  .mobile-toggle .toggle-arrow {
+    font-size: 18px;
+    line-height: 1;
+  }
+
+  .mobile-categories-toggle {
+    color: #666;
+    font-size: 13px;
+    font-weight: bold;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+  }
+
+  .topbar:not(.is-collapsed) .mobile-categories-toggle {
+    order: 3;
+    margin-left: 34px;
+  }
+
+  .topbar:not(.is-collapsed) .topbar-content {
+    order: 2;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    margin-left: 0;
+  }
+
+  .viewport {
+    height: calc(100vh - 16px);
+    padding: 8px;
+  }
+
+  .board {
+    min-width: 2800px;
+    padding: 8px;
+  }
+
+  .categories-title {
+    display: none;
+  }
+
+  .categories-panel > .categories-toggle {
+    display: none;
+  }
+
+  .categories-panel.is-collapsed .completed-grid {
+    display: none;
+  }
+}
 </style>
 </head>
 
 <body>
 
-<div class="topbar">
+<div id="topbar" class="topbar is-collapsed">
+  <button id="mobileMenuToggle" class="mobile-toggle" type="button">
+    <span class="toggle-arrow">→</span>
+  </button>
+  <button id="mobileCategoriesToggle" class="mobile-categories-toggle" type="button">Категории →</button>
 
-  <button id="newGameBtn">Начать заново</button>
-  <div>Соединения: <b id="score">0</b></div>
-  <div>Собрано категорий: <b id="completedCount">0</b></div>
-  <div class="mistakes-hidden">
-  Ошибки: <b id="mistakes">0</b>
-  </div>
+  <div class="topbar-content">
+    <button id="newGameBtn">Начать заново</button>
+    <div>Соединения: <b id="score">0</b></div>
+    <div>Собрано категорий: <b id="completedCount">0</b></div>
+    <div class="mistakes-hidden">
+    Ошибки: <b id="mistakes">0</b>
+    </div>
 
-  <div class="controls">
-    <button id="level1Btn" class="level-btn" data-level="level1">Раз</button>
-    <button id="level2Btn" class="level-btn" data-level="level2">Два</button>
+    <div class="controls">
+      <button id="level1Btn" class="level-btn" data-level="level1">Раз</button>
+      <button id="level2Btn" class="level-btn" data-level="level2">Два</button>
+    </div>
   </div>
 </div>
 
 <div class="viewport">
   <div class="board">
-    <div class="section-title">Категории</div>
-    <div id="completedGrid" class="completed-grid"></div>
+    <div id="categoriesPanel" class="categories-panel is-collapsed">
+      <button id="categoriesToggle" class="categories-toggle" type="button">Категории →</button>
+      <div class="section-title categories-title">Категории</div>
+      <div id="completedGrid" class="completed-grid"></div>
+    </div>
 
     <div class="section-title">Понятия</div>
     <div id="rows" class="rows"></div>
@@ -1602,7 +1717,7 @@ const LEVELS = {
         "Экофиск",
         "Юралс",
         "Сибирская Лёгкая",
-        "Дубай",
+        "Мурбан",
         "Карачаганак",
         "Тенгиз",
         "Бонни Лайт",
@@ -1638,7 +1753,7 @@ const LEVELS = {
         "Рафаэль Санти",
         "Тициан Вечеллио",
         "Джотто ди Бондоне",
-        "Сандо Боттичелли",
+        "Сандро Боттичелли",
         "Лукас Кранах",
         "Альбрехт Дюрер",
         "Антонио Корреджо",
@@ -2373,7 +2488,7 @@ const LEVELS = {
         "Ларвитар",
         "Геракросс",
         "Санфлора",
-        "Гардевойр",
+        "Гардевуар",
         "Спинда",
         "Метагросс",
         "Саламенс",
@@ -3021,6 +3136,27 @@ function updateLevelButtons() {
   });
 }
 
+function toggleTopbar() {
+  const topbar = document.getElementById("topbar");
+  const arrow = document.querySelector("#mobileMenuToggle .toggle-arrow");
+  const collapsed = topbar.classList.toggle("is-collapsed");
+
+  arrow.textContent = collapsed ? "→" : "←";
+}
+
+function toggleCategoriesPanel() {
+  const panel = document.getElementById("categoriesPanel");
+  const buttons = [
+    document.getElementById("categoriesToggle"),
+    document.getElementById("mobileCategoriesToggle")
+  ];
+  const collapsed = panel.classList.toggle("is-collapsed");
+
+  buttons.forEach(button => {
+    button.textContent = collapsed ? "Категории →" : "Категории ←";
+  });
+}
+
 /* =========================================
    СОЗДАНИЕ ИГРЫ
    ========================================= */
@@ -3335,6 +3471,9 @@ function init() {
 document.getElementById("newGameBtn").addEventListener("click", newGame);
 document.getElementById("level1Btn").addEventListener("click", () => setLevel("level1"));
 document.getElementById("level2Btn").addEventListener("click", () => setLevel("level2"));
+document.getElementById("mobileMenuToggle").addEventListener("click", toggleTopbar);
+document.getElementById("categoriesToggle").addEventListener("click", toggleCategoriesPanel);
+document.getElementById("mobileCategoriesToggle").addEventListener("click", toggleCategoriesPanel);
 
 init();
 </script>
