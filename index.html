@@ -13,7 +13,7 @@
 body {
   margin: 0;
   font-family: Arial, sans-serif;
-  background: #f7f7f7;
+  background: #fffff0;
   color: #222;
 }
 
@@ -69,10 +69,11 @@ button:hover {
 }
 
 .completed-grid {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: repeat(10, max-content);
   gap: 12px;
   align-content: flex-start;
+  justify-content: flex-start;
   margin-bottom: 20px;
   min-height: 20px;
 }
@@ -85,27 +86,30 @@ button:hover {
 
 .row {
   display: flex;
-  gap: 12px;
+  gap: 8px;
   align-items: flex-start;
   min-height: 52px;
   width: max-content;
 }
 
 .tile {
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  overflow: hidden;
+  display: inline-flex;
+  position: relative;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: visible;
 
-  min-height: 44px;
-  max-width: 220px;
-  padding: 8px 10px;
+  min-height: 34px;
+  width: fit-content;
+  min-width: 0;
+  max-width: 260px;
+  padding: 6px 9px;
   border: 1px solid #999;
-  border-radius: 12px;
+  border-radius: 8px;
   background: white;
   cursor: pointer;
   font-size: 14px;
-  line-height: 1.25;
+  line-height: 1.2;
   white-space: normal;
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -129,14 +133,140 @@ button:hover {
 .tile.completed {
   font-weight: bold;
   border-width: 3px;
+  min-height: 38px;
 }
 
 .tile.merged {
   border-width: 3px;
+  max-width: 215px;
+}
+
+.tile.merged[data-tooltip]:hover {
+  z-index: 200;
+}
+
+.tile-count {
+  flex: 0 0 auto;
+  margin-right: 5px;
+  font-weight: 700;
+}
+
+.tile-text {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  text-align: left;
+}
+
+.tile.merged[data-tooltip]::after {
+  content: attr(data-tooltip);
+  position: absolute;
+  left: 0;
+  top: calc(100% + 8px);
+  z-index: 201;
+  max-width: 360px;
+  min-width: min(280px, 80vw);
+  padding: 8px 10px;
+  border: 1px solid #222;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: 0 8px 22px rgba(0,0,0,0.16);
+  color: #222;
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 400;
+  text-align: left;
+  white-space: normal;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity 0.12s ease 0s,
+    visibility 0s linear 0.12s;
+}
+
+.tile.merged[data-tooltip]:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transition:
+    opacity 0.12s ease 1s,
+    visibility 0s linear 1s;
+}
+
+body.is-dragging .tile.merged[data-tooltip]::after {
+  opacity: 0;
+  visibility: hidden;
+  transition: none;
+}
+
+.drag-preview {
+  position: fixed;
+  left: -1000px;
+  top: -1000px;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.confetti-canvas {
+  position: fixed;
+  inset: 0;
+  z-index: 300;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
 }
 
 .tile.shake {
   animation: shake 0.28s linear 1;
+}
+button.active-level {
+  background: #6f4e37;
+  color: white;
+  border-color: #6f4e37;
+}
+
+.tile.draggable {
+  cursor: grab;
+}
+
+.tile.dragging {
+  opacity: 0.45;
+}
+
+.tile.drop-before {
+  box-shadow: -6px 0 0 #4a90e2;
+}
+
+.tile.drop-after {
+  box-shadow: 6px 0 0 #4a90e2;
+}
+
+#mistakes {
+  color: transparent;
+  user-select: text;
+}
+
+#mistakes::selection {
+  color: white;
+  background: #6f4e37;
+}
+
+.mistakes-hidden {
+  color: transparent;
+  user-select: text;
+}
+
+.mistakes-hidden::selection {
+  color: white;
+  background: #6f4e37;
+}
+
+.mistakes-hidden::-moz-selection {
+  color: white;
+  background: #6f4e37;
 }
 
 @keyframes shake {
@@ -153,12 +283,17 @@ button:hover {
 <body>
 
 <div class="topbar">
+
+  <button id="newGameBtn">Начать заново</button>
   <div>Соединения: <b id="score">0</b></div>
-  <div>Ошибки: <b id="mistakes">0</b></div>
   <div>Собрано категорий: <b id="completedCount">0</b></div>
+  <div class="mistakes-hidden">
+  Ошибки: <b id="mistakes">0</b>
+  </div>
 
   <div class="controls">
-    <button id="newGameBtn">Новая игра</button>
+    <button id="level1Btn" class="level-btn" data-level="level1">Раз</button>
+    <button id="level2Btn" class="level-btn" data-level="level2">Два</button>
   </div>
 </div>
 
@@ -171,6 +306,8 @@ button:hover {
     <div id="rows" class="rows"></div>
   </div>
 </div>
+
+<canvas id="confettiCanvas" class="confetti-canvas" hidden></canvas>
 
 <script>
 /* =========================================
@@ -378,7 +515,7 @@ const GAME_DATA = {
     {
       id: "silent_movie",
       title: "Немое кино",
-      color: "#F08080",
+      color: "#DCDCDC",
       borderColor: "#2F4F4F",
       words: [ 
         "Путешествие на Луну",
@@ -406,7 +543,7 @@ const GAME_DATA = {
         "Крылья",
         "Метрополис",
         "Наполеон",
-        "Ящик Пандоры",
+        "Ветер",
         "Толпа",
         "Земля",
         "Танцовщица из Идзу",
@@ -470,7 +607,7 @@ const GAME_DATA = {
         "Чёрный Питер",
         "Картонная коробка",
         "Алое кольцо",
-        "Дьяволова нога",
+        "Дяволова нога",
         "Камень Мазарини",
         "Человек на четвереньках",
         "Вампир в Суссексе",
@@ -540,7 +677,7 @@ const GAME_DATA = {
         "Редьярд Киплинг",
         "Сельма Лагерлёф",
         "Уильям Йейтс",
-        "Морис Меттерлинк",
+        "Морим Меттерлинк",
         "Кнут Гамсун",
         "Владислав Реймонт",
         "Бернард Шоу",
@@ -615,20 +752,20 @@ const GAME_DATA = {
         "Эспаньола",
         "Секрет",
         "Попрыгунья",
-        "Летучий Голландец",
+        "Сурат",
         "Вингилот",
         "Лавр Георгиевич",
         "Приключение",
         "Пекод",
         "Покоритель Зари",
         "Святая Мария",
-        "Сын Грома",
+        "Сын грома",
         "Фараон",
         "Беда",
         "Дункан",
         "Чёрная Каракатица",
         "Деметр",
-        "Аляска",
+        "Нагльфар",
         "Пандора",
         "Морж",
         "Отчаянный",
@@ -682,7 +819,7 @@ const GAME_DATA = {
     {
       id: "painters",
       title: "Художники 20-го века",
-      color: "#FFA500",
+      color: "#FFFF00",
       borderColor: "#00FFFF",
       words: [ 
         "Василий Кандинский",
@@ -771,8 +908,8 @@ const GAME_DATA = {
         "Зверобой",
         "Мак",
         "Маргаритка",
-        "Незабудка",
-        "Календула",
+        "Незабука",
+        "Ноготки",
         "Олеандр",
         "Одуванчик",
         "Тюльпан",
@@ -817,7 +954,7 @@ const GAME_DATA = {
         "Турандот",
         "Иоланта",
         "Князь Игорь",
-        "Кольцо Нибелунга",
+        "Летучий голландец",
         "Лючия ди Ламмермур",
         "Отелло",
         "Дон Кихот",
@@ -834,7 +971,7 @@ const GAME_DATA = {
     {
       id: "birds",
       title: "Птицы",
-      color: "#FFC0CB",
+      color: "#D3D3D3",
       borderColor: "#F4A460",
       words: [ 
         "Орёл",
@@ -954,7 +1091,7 @@ const GAME_DATA = {
         "Аба-вуа",
         "Аркбутан",
         "Атлант",
-        "Неф",
+        "Амазонка",
         "Апсида",
         "Арка",
         "Балюстрада",
@@ -986,7 +1123,7 @@ const GAME_DATA = {
    {
       id: "music",
       title: "Музыкальные инструменты",
-      color: "#F0E68C",
+      color: "#FFE4B5",
       borderColor: "#8B008B",
       words: [ 
         "Скрипка",
@@ -1015,10 +1152,10 @@ const GAME_DATA = {
         "Гармонь",
         "Ложки",
         "Колокольчики",
-        "Саксофон",
+        "Треугольник",
         "Тарелки",
         "Литавры",
-        "Саз"
+        "Барабан"
       ]
     },
     {
@@ -1065,7 +1202,7 @@ const GAME_DATA = {
       color: "#FF4500",
       borderColor: "#7CFC00",
       words: [ 
-        "Лес",
+        "Гроза",
         "Вишнёвый сад",
         "Дракон",
         "Бег",
@@ -1125,7 +1262,7 @@ const GAME_DATA = {
         "Великая Китайская стена",
         "Мёртвое море",
         "Лох-Несс",
-        "Сикстинская капелла",
+        "Сикситинская капелла",
         "Долина монументов",
         "Васко да Гама",
         "Нойшванштайн",
@@ -1275,7 +1412,7 @@ const GAME_DATA = {
         "Гололедица",
         "Позёмок",
         "Метель",
-        "Радуга",
+        "Торнадо",
         "Ураган",
         "Мороз",
         "Жара",
@@ -1317,7 +1454,7 @@ const GAME_DATA = {
         "Памперо",
         "Погон",
         "Теббад",
-        "Гибли",
+        "Торнадо",
         "Трамонтана",
         "Харматан",
         "Шинук",
@@ -1327,17 +1464,1176 @@ const GAME_DATA = {
     }
   ]
 };
+const LEVELS = {
+  level1: {
+    title: "Первый уровень",
+    storageKey: "word-game-level-1-state",
+    categories: GAME_DATA.categories
+  },
 
+  level2: {
+    title: "Второй уровень",
+    storageKey: "word-game-level-2-state-full",
+    categories: [
+{
+      id: "grapes",
+      title: "Сорта винограда",
+      color: "#F1D7E8",
+      borderColor: "#8A3D69",
+      words: [ 
+        "Рислинг",
+        "Изабелла",
+        "Вердехо",
+        "Гарнача",
+        "Гевюрцтраминер",
+        "Зинфандель",
+        "Кларет",
+        "Ламбруско",
+        "Мальбек",
+        "Мальвазия",
+        "Манзони",
+        "Москатель",
+        "Мурведр",
+        "Негроамаро",
+        "Пино Нуар",
+        "Пино Гри",
+        "Пинотаж",
+        "Примитиво",
+        "Санджовезе",
+        "Шираз",
+        "Темпранильо",
+        "Шардоне",
+        "Торронтес",
+        "Сусуманьелло",
+        "Сильванер",
+        "Саперави",
+        "Канайоло",
+        "Кариньян",
+        "Карменер",
+        "Ркацители"
+      ]
+  },
+  {
+      id: "fish",
+      title: "Рыбы",
+      color: "#CFEFEA",
+      borderColor: "#23706A",
+      words: [ 
+        "Бычок",
+        "Сом",
+        "Окунь",
+        "Лосось",
+        "Селёдка",
+        "Арлекин",
+        "Вуалехвост",
+        "Дорадо",
+        "Зубатка",
+        "Кардинал",
+        "Карп",
+        "Колюшка",
+        "Конь",
+        "Лоцман",
+        "Линь",
+        "Клоун",
+        "Пескарь",
+        "Петушок",
+        "Салака",
+        "Хирург",
+        "Носорог",
+        "Сардина",
+        "Телескоп",
+        "Сёмга",
+        "Судак",
+        "Сиг",
+        "Звездочёт",
+        "Карась",
+        "Ёрш",
+        "Хек"
+      ]
+    },
+    {
+      id: "china",
+      title: "Города Китая",
+      color: "#FFE0D6",
+      borderColor: "#B6533C",
+      words: [ 
+        "Пекин",
+        "Шанхай",
+        "Кашгар",
+        "Яньцзи",
+        "Бэнбу",
+        "Ухань",
+        "Харбин",
+        "Иньчуань",
+        "Куча",
+        "Лхаса",
+        "Нанкин",
+        "Цзинин",
+        "Гуанчжоу",
+        "Хуалянь",
+        "Далянь",
+        "Даньдун",
+        "Синьян",
+        "Тайбэй",
+        "Шэньчжэнь",
+        "Чугучак",
+        "Лишуй",
+        "Хами",
+        "Тяньцзинь",
+        "Мяньян",
+        "Хотан",
+        "Пинлян",
+        "Ибинь",
+        "Наньпин",
+        "Наньян",
+        "Гуйлинь"
+      ]
+    },
+    {
+      id: "oil",
+      title: "Сорта нефти",
+      color: "#E4DED4",
+      borderColor: "#6F5A44",
+      words: [ 
+        "Минас",
+        "Тролль",
+        "Смесь ВСТО",
+        "Брент",
+        "Экофиск",
+        "Юралс",
+        "Сибирская Лёгкая",
+        "Дубай",
+        "Карачаганак",
+        "Тенгиз",
+        "Бонни Лайт",
+        "Оман",
+        "Дубай",
+        "Нильская Смесь",
+        "Батьхо",
+        "Посейдон",
+        "Марс",
+        "Майя",
+        "Ольмека",
+        "Винсент",
+        "Эс-Сидер",
+        "Эскаланте",
+        "Аль-Шахин",
+        "Верхний Закум",
+        "Брасс Ривер",
+        "Бонга",
+        "Юхан Свердруп",
+        "Юхан Кастберг",
+        "Окарем",
+        "Киянлы"
+      ]
+    },
+    {
+      id: "renaissance",
+      title: "Художники Возрождения",
+      color: "#F8E2C2",
+      borderColor: "#B5752C",
+      words: [ 
+        "Леонардо да Винчи",
+        "Микеланджело Буонарроти",
+        "Рафаэль Санти",
+        "Тициан Вечеллио",
+        "Джотто ди Бондоне",
+        "Сандо Боттичелли",
+        "Лукас Кранах",
+        "Альбрехт Дюрер",
+        "Антонио Корреджо",
+        "Ганс Гольбейн",
+        "Караваджо",
+        "Паоло Веронезе",
+        "Питер Брейгель",
+        "Доменико Гирландайо",
+        "Пьетро Перуджино",
+        "Фра Анджелико",
+        "Якопо Понтормо",
+        "Андреа Мантенья",
+        "Андреа Дель Сарто",
+        "Ганс Мемлинг",
+        "Рогир ван дер Вейден",
+        "Ян ван Эйк",
+        "Якопо Сансовино",
+        "Иероним Босх",
+        "Ян Провост",
+        "Хуго ван дер Гус",
+        "Хуберт ван Эйк",
+        "Роберт Кампен",
+        "Беноццо Гоццоли",
+        "Джованни Беллини"
+      ]
+    },
+    {
+      id: "sci-fi",
+      title: "Писатели-фантасты",
+      color: "#DDE5FF",
+      borderColor: "#5267B0",
+      words: [ 
+        "Альфред Бестер",
+        "Роберт Хайнлайн",
+        "Фриц Лейбер",
+        "Пол Андерсон",
+        "Роберт Шекли",
+        "Клиффорд Саймак",
+        "Филип К. Дик",
+        "Мэрион Брэдли",
+        "Фрэнк Герберт",
+        "Роджер Желязны",
+        "Урсула Ле Гуин",
+        "Энн Маккэфри",
+        "Фредерик Пол",
+        "Джордж Мартин",
+        "Кэролайн Черри",
+        "Уильям Гибсон",
+        "Нил Гейман",
+        "Джоан Роулинг",
+        "Джон Толкиен",
+        "Чайна Мьевиль",
+        "Джордж Оруэлл",
+        "Станислав Лем",
+        "Рэй Брэдбери",
+        "Сьюзен Коллинз",
+        "Лю Цысинь",
+        "Евгений Замятин",
+        "Иэн Бэнкс",
+        "Анджей Сапковский",
+        "Олдос Хаксли",
+        "Андре Нортон"
+      ]
+    },
+    {
+      id: "cheese",
+      title: "Сыр",
+      color: "#FFF0B8",
+      borderColor: "#B37B16",
+      words: [ 
+        "Бофор",
+        "Бри",
+        "Буррата",
+        "Валансе",
+        "Виола",
+        "Гауда",
+        "Горгондзола",
+        "Грюйер",
+        "Дорблю",
+        "Камамбер",
+        "Кесо де мано",
+        "Лимбургер",
+        "Манчего",
+        "Маасдам",
+        "Маскарпоне",
+        "Моцарелла",
+        "Мюнстер",
+        "Пармезан",
+        "Пекорино",
+        "Проволоне",
+        "Рокфор",
+        "Тильзитер",
+        "Фета",
+        "Филадельфия",
+        "Чечил",
+        "Эдам",
+        "Эмменталь",
+        "Сулугуни",
+        "Чедер",
+        "Хорац панир"
+      ]
+    },
+    {
+      id: "mathematicians",
+      title: "Математики",
+      color: "#DDECF7",
+      borderColor: "#3E6C91",
+      words: [ 
+        "Исаак Ньютон",
+        "Карл Гаусс",
+        "Леонард Эйлер",
+        "Готфрид Лейбниц",
+        "Рене Декарт",
+        "Пьер Ферма",
+        "Блез Паскаль",
+        "Махаммад аль-Хорезми",
+        "Леонардо Фибоначчи",
+        "Софья Ковалевская",
+        "Курт Гёдель",
+        "Бенуа Мандельброт",
+        "Николай Лобачевский",
+        "Джон фон Нейман",
+        "Анри Пуанкаре",
+        "Петер Дирихле",
+        "Давид Гильберт",
+        "Эмми Нётер",
+        "Сриниваса Рамануджан",
+        "Норберт Винер",
+        "Стефан Банах",
+        "Георг Кантор",
+        "Эварист Галуа",
+        "Карл Вейерштрасс",
+        "Нильс Абель",
+        "Огюстен Коши",
+        "Франсуа Виет",
+        "Анри Лебег",
+        "Марьям Мирзахани",
+        "Григорий Перельман"
+      ]
+    },
+    {
+      id: "theorems",
+      title: "Теоремы о",
+      color: "#E7DCF4",
+      borderColor: "#75549B",
+      words: [ 
+        "Делёж пиццы",
+        "Два милиционера",
+        "Неявная функция",
+        "Четыре краски",
+        "Упаковка кругов",
+        "Неподвижная точка",
+        "Свадьбы",
+        "Шаткий стол",
+        "Невыразимость истины",
+        "Полнота",
+        "Причёсывание ежа",
+        "Бабочка",
+        "Диктатура",
+        "Наполеон",
+        "Бесконечные обезьяны",
+        "Три силы",
+        "Бутерброд",
+        "Пять красок",
+        "Остриё клина",
+        "Свобода воли",
+        "Дедукция",
+        "Гадкий утёнок",
+        "Изоморфизм",
+        "Пьяница",
+        "Отсутствие волос",
+        "1/4",
+        "(1,1)-классы",
+        "Деревья",
+        "Симплектический верблюд",
+        "Разрезание ожерелья"
+      ]
+    },
+   {
+      id: "stars",
+      title: "Звёзды",
+      color: "#E8E1FF",
+      borderColor: "#6752A6",
+      words: [ 
+        "Кастор",
+        "Поллукс",
+        "Алькор",
+        "Мицар",
+        "Сириус",
+        "Исида",
+        "Арктур",
+        "Чжанг",
+        "Сердце Карла",
+        "Спика",
+        "Шедар",
+        "Канопус",
+        "Денеб",
+        "Регул",
+        "Вега",
+        "Полярная",
+        "Хамаль",
+        "Альтаир",
+        "Бетельгейзе",
+        "Ригель",
+        "Беллатрикс",
+        "Полыхающая",
+        "Антарес",
+        "Объект Сакураи",
+        "Альдебаран",
+        "Тяньгуань",
+        "Голова Гидры",
+        "Фомальгаут",
+        "Акрукс",
+        "Садалмелик"
+      ]
+    },
+   {
+      id: "islands",
+      title: "Острова",
+      color: "#D6F0DD",
+      borderColor: "#3D8052",
+      words: [ 
+        "Ольхон",
+        "Мадагаскар",
+        "Ява",
+        "Пасхи",
+        "Исландия",
+        "Ирландия",
+        "Сахалин",
+        "Огненная Земля",
+        "Хоккайдо",
+        "Мальта",
+        "Тринидад",
+        "Бора-Бора",
+        "Сааремаа",
+        "Наксос",
+        "Крит",
+        "Терсхеллинг",
+        "Оланд",
+        "Эланд",
+        "Медвежий",
+        "Лансароте",
+        "Тенерифе",
+        "Мадейра",
+        "Скай",
+        "Мэн",
+        "Корсика",
+        "Лесбос",
+        "Крк",
+        "Рюген",
+        "Борнхольм",
+        "Эрё"
+      ]
+    },
+   {
+      id: "ohenry",
+      title: "Рассказы О. Генри",
+      color: "#F5DAD2",
+      borderColor: "#9A5948",
+      words: [ 
+        "Неоконченный рассказ",
+        "Линии судьбы",
+        "Зелёная дверь",
+        "Маятник",
+        "Горящий светильник",
+        "Гарлемская трагедия",
+        "Дары волхвов",
+        "Пурпурное платье",
+        "Последний лист",
+        "Русские соболя",
+        "Сердце и крест",
+        "Трест, который лопнул",
+        "Поросячья этика",
+        "Голос Большого Города",
+        "Один час полной жизни",
+        "Персики",
+        "Пока ждёт автомобиль",
+        "Третий ингредиент",
+        "Дороги, которые мы выбираем",
+        "Вопрос высоты над уровнем моря",
+        "Громила и Томми",
+        "Деловые люди",
+        "Психея и небоскрёб",
+        "Калиф и хам",
+        "Налёт на поезд",
+        "Маркиз и мисс Салли",
+        "На помощь, друг!",
+        "Пятое колесо",
+        "Искусство и ковбойский конь",
+        "Розы, резеда и романтика"
+      ]
+    },
+   {
+      id: "vehicles",
+      title: "Транспортные средства",
+      color: "#D9E2E8",
+      borderColor: "#536F80",
+      words: [ 
+        "Телега",
+        "Бричка",
+        "Возок",
+        "Дормез",
+        "Дровни",
+        "Дрожки",
+        "Кабриолет",
+        "Карета",
+        "Кибитка",
+        "Коляска",
+        "Ландо",
+        "Фаэтон",
+        "Тарантас",
+        "Дилижанс",
+        "Эгоистка",
+        "Пролетка",
+        "Арба",
+        "Двуколка",
+        "Карроччо",
+        "Колесница",
+        "Кэб",
+        "Линейка",
+        "Колымага",
+        "Нарты",
+        "Омнибус",
+        "Таратайка",
+        "Фиакр",
+        "Шарабан",
+        "Фургон",
+        "Рыдван"
+      ]
+    },
+   {
+      id: "heraldry",
+      title: "Геральдика",
+      color: "#F4D2D9",
+      borderColor: "#9D4054",
+      words: [ 
+        "Глава",
+        "Столб",
+        "Пояс",
+        "Перевязь",
+        "Крест",
+        "Стропило",
+        "Кайма",
+        "Костыль",
+        "Вольная четверть",
+        "Арматура",
+        "Венец",
+        "Вензель",
+        "Виноград",
+        "Дубовый лист",
+        "Девиз",
+        "Грифон",
+        "Гарпия",
+        "Пирамида",
+        "Колос",
+        "Копьё",
+        "Корона",
+        "Мантия",
+        "Меч",
+        "Пеликан",
+        "Роза",
+        "Сень",
+        "Скипетр",
+        "Щитодержатели",
+        "Веретено",
+        "Пирамида"
+      ]
+    },
+   {
+      id: "rodents",
+      title: "Грызуны",
+      color: "#ECE0D2",
+      borderColor: "#7B6043",
+      words: [ 
+        "Агути",
+        "Белка",
+        "Суслик",
+        "Сурок",
+        "Бурундук",
+        "Летяга",
+        "Луговая собачка",
+        "Бобр",
+        "Дегу",
+        "Дикобраз",
+        "Пескорой",
+        "Голый землекоп",
+        "Колючая соня",
+        "Мышь",
+        "Водяная крыса",
+        "Серая крыса",
+        "Шиншилла",
+        "Лазающий хомяк",
+        "Тушканчик",
+        "Емуранчик",
+        "Тарбаганчик",
+        "Лесная соня",
+        "Соня-полчок",
+        "Слепыш",
+        "Капибара",
+        "Патагонская мара",
+        "Куи",
+        "Крысиный восьмизуб",
+        "Воалаво",
+        "Серебристый шипохвост"
+      ]
+    },
+   {
+      id: "cities",
+      title: "Вымышленные города",
+      color: "#DCE6F2",
+      borderColor: "#4D6F96",
+      words: [ 
+        "Анк-Морпорк",
+        "Арканар",
+        "Аркхем",
+        "Глупов",
+        "Сайлент Хилл",
+        "Твин Пикс",
+        "Макондо",
+        "Исидора",
+        "Беллона",
+        "Касл-Рок",
+        "Ехо",
+        "Ривенделл",
+        "Минас Тирит",
+        "Цинтра",
+        "Ривия",
+        "Нью-Кробюзон",
+        "Эн",
+        "Гравити Фолз",
+        "Спрингфилд",
+        "Кэр-Параваль",
+        "Ташбаан",
+        "Тир на Ног",
+        "Хогсмид",
+        "Нон Лон Дон",
+        "Амбер",
+        "Эс",
+        "Астроград",
+        "Тир Валон",
+        "Хавнор",
+        "Рок"
+      ]
+    },
+   {
+      id: "africa",
+      title: "Страны Африки",
+      color: "#F6E1B7",
+      borderColor: "#9A6A1D",
+      words: [ 
+        "Алжир",
+        "Египет",
+        "Ливия",
+        "Марокко",
+        "Судан",
+        "Тунис",
+        "Бенин",
+        "Того",
+        "Лесото",
+        "Ангола",
+        "Габон",
+        "Сенегал",
+        "ЮАР",
+        "Эритрея",
+        "Эфиопия",
+        "Замбия",
+        "Бурунди",
+        "Джибути",
+        "Камерун",
+        "Чад",
+        "Кабо-Верде",
+        "Мали",
+        "Мавритания",
+        "Либерия",
+        "Гвинея",
+        "Танзания",
+        "Руанда",
+        "Уганда",
+        "Малави",
+        "Ботсвана"
+      ]
+    },
+   {
+      id: "furniture",
+      title: "Мебель",
+      color: "#E8D8C8",
+      borderColor: "#7A5636",
+      words: [ 
+        "Диван",
+        "Буфет",
+        "Гардероб",
+        "Комод",
+        "Дастархан",
+        "Кресло",
+        "Канапе",
+        "Козетка",
+        "Конторка",
+        "Консоль",
+        "Кассоне",
+        "Секретер",
+        "Оттоманка",
+        "Стенка",
+        "Тахта",
+        "Трюмо",
+        "Трельяж",
+        "Этажерка",
+        "Тумба",
+        "Шезлонг",
+        "Шифоньер",
+        "Топчан",
+        "Кушетка",
+        "Бюро",
+        "Калошница",
+        "Сервант",
+        "Колыбель",
+        "Дифр",
+        "Горка",
+        "Геридон"
+      ]
+    },
+   {
+      id: "solar",
+      title: "Боги солнца",
+      color: "#FFE8A8",
+      borderColor: "#A46E00",
+      words: [ 
+        "Амон",
+        "Арев",
+        "Ариннити",
+        "Баалшамин",
+        "Атон",
+        "Бальдр",
+        "Айа",
+        "Вивасват",
+        "Вуриупранили",
+        "Гела",
+        "Гелиос",
+        "Гор",
+        "Даждьбог",
+        "Зун",
+        "Инти",
+        "Истанус",
+        "Кече",
+        "Кинич Ахау",
+        "Махек",
+        "Михр",
+        "Нанауацин",
+        "Пушан",
+        "Ра",
+        "Сауле",
+        "Соль",
+        "Сол",
+        "Уицилопочтли",
+        "Сурья",
+        "Тонатиу",
+        "Уту"
+      ]
+    },
+   {
+      id: "inventions",
+      title: "Изобретения",
+      color: "#D7E7D2",
+      borderColor: "#5D7F49",
+      words: [ 
+        "Колесо",
+        "Гвозди",
+        "Компас",
+        "Бумага",
+        "Печатный станок",
+        "Антибиотики",
+        "Интернет",
+        "Гончарный круг",
+        "Порох",
+        "Паровой двигатель",
+        "Воздушный шар",
+        "Сеялка",
+        "Паровоз",
+        "Холодильник",
+        "Ткацкий станок",
+        "Электромагнит",
+        "Двигатель внутреннего сгорания",
+        "Велосипед",
+        "Телефон",
+        "Шариковая ручка",
+        "Бюстгальтер",
+        "Застёжка-молния",
+        "Микроскоп",
+        "Целлофан",
+        "Фарфор",
+        "Карандаш",
+        "Шахматы",
+        "Мельница",
+        "Акваланг",
+        "Компьютер"
+      ]
+    },
+   {
+      id: "lakes",
+      title: "Озёра",
+      color: "#D6EBF7",
+      borderColor: "#377CA1",
+      words: [ 
+        "Кишэзерс",
+        "Байкал",
+        "Виктория",
+        "Комо",
+        "Гарда",
+        "Иссык-Куль",
+        "Онтарио",
+        "Ван",
+        "Севан",
+        "Эри",
+        "Виннипег",
+        "Балхаш",
+        "Ладожское",
+        "Верхнее",
+        "Мичиган",
+        "Гурон",
+        "Танганьика",
+        "Энгурес",
+        "Чудское",
+        "Каруярв",
+        "Балатон",
+        "Анси",
+        "Боденское",
+        "Ванзее",
+        "Сайма",
+        "Лох-Несс",
+        "Венерн",
+        "Альберт",
+        "Меларен",
+        "Эдуард"
+      ]
+    },
+   {
+      id: "cakes",
+      title: "Торты",
+      color: "#F7D7E3",
+      borderColor: "#A54E72",
+      words: [ 
+        "Медовик",
+        "Полено",
+        "Прага",
+        "Киевский",
+        "Капрезе",
+        "Муравейник",
+        "Сказка",
+        "Полёт",
+        "Ленинградский",
+        "Тирамису",
+        "Шакотис",
+        "Нью-Йорк",
+        "Шварцвальд",
+        "Дунайские волны",
+        "Красный бархат",
+        "Добош",
+        "Захер",
+        "Эстерхази",
+        "Сметанник",
+        "Микадо",
+        "Монастырская изба",
+        "Птичье молоко",
+        "Павлова",
+        "Молочная девочка",
+        "Панчо",
+        "Пьяная вишня",
+        "Три шоколада",
+        "Графские развалины",
+        "Пломбир",
+        "Сан-Себастьян"
+      ]
+    },
+   {
+      id: "dinosaurs",
+      title: "Динозавры",
+      color: "#DCECC4",
+      borderColor: "#6C8535",
+      words: [ 
+        "Археоптерикс",
+        "Брахиозавр",
+        "Диплодок",
+        "Ихтиозавр",
+        "Карнотавр",
+        "Стегозавр",
+        "Спинозавр",
+        "Трицератопс",
+        "Тираннозавр",
+        "Велоцираптор",
+        "Анкилозавр",
+        "Гипсилофодон",
+        "Сибиротитан",
+        "Амфицелий",
+        "Зауролоф",
+        "Игуанодон",
+        "Тарбозавр",
+        "Компсогнат",
+        "Дейноних",
+        "Аллозавр",
+        "Орнитопод",
+        "Сципионикс",
+        "Педопенна",
+        "Анхиорнис",
+        "Мононик",
+        "Конкавенатор",
+        "Паралититан",
+        "Ютараптор",
+        "Троодон",
+        "Дракорекс"
+      ]
+    },
+   {
+      id: "pokemons",
+      title: "Покемоны",
+      color: "#F6D6C8",
+      borderColor: "#A85C3C",
+      words: [ 
+        "Венузавр",
+        "Ратата",
+        "Алаказам",
+        "Слоупок",
+        "Волторб",
+        "Лапрас",
+        "Вапореон",
+        "Снорлакс",
+        "Аэродактиль",
+        "Драгонэйр",
+        "Мью",
+        "Амфарос",
+        "Тиранитар",
+        "Донфэн",
+        "Поригон",
+        "Ларвитар",
+        "Геракросс",
+        "Санфлора",
+        "Гардевойр",
+        "Спинда",
+        "Метагросс",
+        "Саламенс",
+        "Кайогр",
+        "Граудон",
+        "Тортерра",
+        "Эмполеон",
+        "Кранидос",
+        "Диалга",
+        "Даркрай",
+        "Аркеус"
+      ]
+    },
+   {
+      id: "civil",
+      title: "Гражданская оборона",
+      color: "#DADCE8",
+      borderColor: "#5A607B",
+      words: [ 
+        "Лоботомия",
+        "Бери шинель",
+        "Винтовка — это праздник",
+        "Иуда будет в раю",
+        "Общество «Память»",
+        "Продолжая продолжать",
+        "Солдатами не рождаются",
+        "Мы — лёд",
+        "Анархия",
+        "Государство",
+        "Второй эшелон",
+        "Никто не хотел умирать",
+        "Зоопарк",
+        "Он увидел солнце",
+        "Самоотвод",
+        "Сквозь дыру в моей голове",
+        "Здорово и вечно",
+        "Всё как у людей",
+        "Моя оборона",
+        "Всё совсем не то",
+        "Как листовка",
+        "Философская песня о пуле",
+        "Без меня",
+        "Долгая счастливая жизнь",
+        "Значит, ураган",
+        "Сияние",
+        "Всё это с тобой",
+        "Пой, революция",
+        "У войны не женское лицо",
+        "Про дурачка"
+      ]
+    },
+   {
+      id: "books",
+      title: "Книги нобелевских лауреатов",
+      color: "#EFE1C8",
+      borderColor: "#8C6735",
+      words: [ 
+        "Камо грядеши",
+        "Сага о Форсайтах",
+        "Игра в бисер",
+        "Фиеста",
+        "Посторонний",
+        "Доктор Живаго",
+        "Консервный ряд",
+        "Тошнота",
+        "Моллой",
+        "В круге первом",
+        "Бильард в половине десятого",
+        "Сто лет одиночества",
+        "Повелитель мух",
+        "Возлюбленная",
+        "Снежная страна",
+        "Конец дня",
+        "Шум и ярость",
+        "Пианистка",
+        "Тётушка Хулия и писака",
+        "Вегетарианка",
+        "Дом, где разбиваются сердца",
+        "Книга джунглей",
+        "Хендерсон — король дождя",
+        "Бегуны",
+        "Имя мне — Красный",
+        "Брак и мораль",
+        "Тихий Дон",
+        "Окаянные дни",
+        "Чернобыльская молитва",
+        "Синяя птица"
+      ]
+    },
+   {
+      id: "dogs",
+      title: "Породы собак",
+      color: "#E2D6C8",
+      borderColor: "#765942",
+      words: [ 
+        "Овчарка",
+        "Бульдог",
+        "Кокер-спаниэль",
+        "Басенджи",
+        "Бассет-хаунд",
+        "Банхар",
+        "Бигль",
+        "Бобтейл",
+        "Боксёр",
+        "Бультерьер",
+        "Вельш-корги",
+        "Выжла",
+        "Фокстерьер",
+        "Доберман",
+        "Ретривер",
+        "Сеттер",
+        "Кане-корсо",
+        "Такса",
+        "Лабрадор",
+        "Лабрадудль",
+        "Левретка",
+        "Малинуа",
+        "Мальтипу",
+        "Шнауцер",
+        "Ньюфаундленд",
+        "Шпиц",
+        "Пудель",
+        "Ротвейлер",
+        "Тоса-ину",
+        "Чау-чау"
+      ]
+    },
+   {
+      id: "alcohol",
+      title: "Алкогольные напитки",
+      color: "#E6D2EA",
+      borderColor: "#80508C",
+      words: [ 
+        "Пиво",
+        "Водка",
+        "Саке",
+        "Вино",
+        "Портвейн",
+        "Ликёр",
+        "Вермут",
+        "Сидр",
+        "Текила",
+        "Коньяк",
+        "Виски",
+        "Джин",
+        "Ром",
+        "Эль",
+        "Абсент",
+        "Арака",
+        "Брага",
+        "Медовуха",
+        "Ракия",
+        "Соджу",
+        "Сотол",
+        "Чача",
+        "Туак",
+        "Махсыма",
+        "Пуаре",
+        "Бренди",
+        "Самбука",
+        "Мескаль",
+        "Граппа",
+        "Узо"
+      ]
+    },
+   {
+      id: "hmm",
+      title: "Герои меча и магии",
+      color: "#D7E0F5",
+      borderColor: "#5069A6",
+      words: [ 
+        "Копейщик",
+        "Лучник",
+        "Орк",
+        "Мечник",
+        "Монах",
+        "Ангел",
+        "Кентавр",
+        "Гном",
+        "Эльф",
+        "Пегас",
+        "Дендроид",
+        "Дракон",
+        "Гремлин",
+        "Горгулья",
+        "Маг",
+        "Джинн",
+        "Нага",
+        "Гигант",
+        "Бес",
+        "Гог",
+        "Демон",
+        "Ифрит",
+        "Скелет",
+        "Вампир",
+        "Лич",
+        "Троглодит",
+        "Циклоп",
+        "Медуза",
+        "Минотавр",
+        "Мантикора"
+      ]
+    },
+   {
+      id: "clothes",
+      title: "Детали одежды",
+      color: "#D5ECE6",
+      borderColor: "#3F7B6E",
+      words: [ 
+        "Воротник",
+        "Рукав",
+        "Пояс",
+        "Кокетка",
+        "Шлица",
+        "Штрипка",
+        "Отворот",
+        "Обшлаг",
+        "Баска",
+        "Волан",
+        "Рюшка",
+        "Оборка",
+        "Гульфик",
+        "Жабо",
+        "Запах",
+        "Карман",
+        "Капюшон",
+        "Погон",
+        "Кант",
+        "Корсаж",
+        "Кринолин",
+        "Лампас",
+        "Лацкан",
+        "Манжета",
+        "Манишка",
+        "Петлица",
+        "Подол",
+        "Турнюр",
+        "Фестон",
+        "Хлястик"
+      ]
+    }
+    ]
+  }
+};
 
 /* =========================================
    СОСТОЯНИЕ
    ========================================= */
 
-const STORAGE_KEY = GAME_DATA.storageKey;
+let currentLevelId = localStorage.getItem("word-game-current-level") || "level1";
+
+function getCurrentLevel() {
+  return LEVELS[currentLevelId] || LEVELS.level1;
+}
+
+let STORAGE_KEY = getCurrentLevel().storageKey;
 const SIZE = GAME_DATA.wordsPerCategory;
 const ITEMS_PER_ROW = GAME_DATA.itemsPerRow;
 const WORD_SEPARATOR = GAME_DATA.wordSeparator;
-const categories = GAME_DATA.categories;
+let categories = getCurrentLevel().categories;
 
 let groups = {};
 let activeRows = [];
@@ -1346,6 +2642,12 @@ let selected = null;
 let score = 0;
 let mistakes = 0;
 let shakingIds = [];
+let draggedGroupId = null;
+let dropTarget = null;
+
+const STATS_ENDPOINT = "https://script.google.com/macros/s/AKfycbwETt_HnVvm_TEdPRmLl21DCYoWVptr6KT4l-iX4aBeQNDaCd2-9vHcC2ISAtXN_pAt/exec";
+const STATS_PLAYER_KEY = "word-game-stats-player";
+const STATS_FIRST_CATEGORY_PREFIX = "word-game-first-category-";
 
 /* =========================================
    УТИЛИТЫ
@@ -1412,18 +2714,26 @@ function clampWordsForTile(words, separator = " - ") {
   return result;
 }
 
+function escapeHTML(text) {
+  return String(text)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;");
+}
+
 function getGroupText(group) {
   if (group.completed) {
-    return clampWordsForTile([group.title], WORD_SEPARATOR);
+    return `<span class="tile-text">${escapeHTML(group.title)}</span>`;
   }
 
-  const text = clampWordsForTile(group.words, WORD_SEPARATOR);
+  const text = group.words.join(WORD_SEPARATOR);
 
   if (group.words.length > 1) {
-    return `<b>${group.words.length}</b>${WORD_SEPARATOR}${text}`;
+    return `<span class="tile-count">${group.words.length}</span><span class="tile-text">${escapeHTML(text)}</span>`;
   }
 
-  return text;
+  return `<span class="tile-text">${escapeHTML(text)}</span>`;
 }
 
 function getTooltipText(group) {
@@ -1452,6 +2762,202 @@ function removeFromRow(groupId) {
   if (activeRows[pos.rowIndex].length === 0) {
     activeRows.splice(pos.rowIndex, 1);
   }
+}
+
+function moveGroupNearTarget(groupId, targetGroupId, position) {
+  const source = findPosition(groupId);
+  const target = findPosition(targetGroupId);
+
+  if (!source || !target) return;
+
+  activeRows[source.rowIndex].splice(source.indexInRow, 1);
+
+  let targetRowIndex = target.rowIndex;
+  let targetIndex = target.indexInRow;
+
+  if (source.rowIndex === target.rowIndex && source.indexInRow < targetIndex) {
+    targetIndex--;
+  }
+
+  if (activeRows[source.rowIndex].length === 0) {
+    activeRows.splice(source.rowIndex, 1);
+
+    if (source.rowIndex < targetRowIndex) {
+      targetRowIndex--;
+    }
+  }
+
+  const targetRow = activeRows[targetRowIndex];
+  const insertIndex = position === "after" ? targetIndex + 1 : targetIndex;
+  targetRow.splice(insertIndex, 0, groupId);
+
+  saveState();
+  render();
+}
+
+function getDropPosition(event, tile) {
+  const rect = tile.getBoundingClientRect();
+  const middle = rect.left + rect.width / 2;
+  return event.clientX < middle ? "before" : "after";
+}
+
+function clearDropTarget() {
+  dropTarget = null;
+}
+
+function setCleanDragImage(event, tile) {
+  const rect = tile.getBoundingClientRect();
+  const preview = tile.cloneNode(true);
+
+  preview.classList.add("drag-preview");
+  preview.classList.remove("dragging", "selected", "drop-before", "drop-after");
+  preview.removeAttribute("data-tooltip");
+  preview.style.width = `${rect.width}px`;
+  preview.style.height = `${rect.height}px`;
+
+  document.body.appendChild(preview);
+  event.dataTransfer.setDragImage(preview, rect.width / 2, rect.height / 2);
+
+  requestAnimationFrame(() => {
+    preview.remove();
+  });
+}
+
+function getStatsPlayer() {
+  const saved = localStorage.getItem(STATS_PLAYER_KEY);
+
+  if (saved) {
+    try {
+      return JSON.parse(saved);
+    } catch (e) {
+      localStorage.removeItem(STATS_PLAYER_KEY);
+    }
+  }
+
+  const suffix = Math.random().toString(36).slice(2, 8);
+  const player = {
+    id: `player-${suffix}-${Date.now().toString(36)}`,
+    nickname: `игрок-${suffix}`
+  };
+
+  localStorage.setItem(STATS_PLAYER_KEY, JSON.stringify(player));
+  return player;
+}
+
+function getFirstCategoryKey() {
+  const player = getStatsPlayer();
+  return `${STATS_FIRST_CATEGORY_PREFIX}${player.id}-${currentLevelId}`;
+}
+
+function getFirstCompletedCategory() {
+  return localStorage.getItem(getFirstCategoryKey()) || "";
+}
+
+function rememberFirstCompletedCategory(categoryTitle) {
+  const key = getFirstCategoryKey();
+  const saved = localStorage.getItem(key);
+
+  if (saved) return saved;
+
+  localStorage.setItem(key, categoryTitle);
+  return categoryTitle;
+}
+
+function sendStatsEvent(eventType, extra = {}) {
+  if (!STATS_ENDPOINT) return;
+
+  const player = getStatsPlayer();
+  const payload = {
+    playerId: player.id,
+    nickname: player.nickname,
+    levelId: currentLevelId,
+    eventType,
+    score,
+    completedCount: completedIds.length,
+    firstCompletedCategory: getFirstCompletedCategory(),
+    userAgent: navigator.userAgent,
+    ...extra
+  };
+
+  try {
+    fetch(STATS_ENDPOINT, {
+      method: "POST",
+      mode: "no-cors",
+      keepalive: true,
+      headers: {
+        "Content-Type": "text/plain;charset=UTF-8"
+      },
+      body: JSON.stringify(payload)
+    }).catch(() => {});
+  } catch (e) {
+    // Статистика не должна мешать игре.
+  }
+}
+
+function launchConfetti() {
+  const canvas = document.getElementById("confettiCanvas");
+  const context = canvas.getContext("2d");
+  const colors = ["#6f4e37", "#d9a441", "#b65f46", "#4f7f6f", "#8b5d8f"];
+  const pieces = [];
+  const duration = 2600;
+  const startedAt = performance.now();
+  const pixelRatio = window.devicePixelRatio || 1;
+
+  canvas.hidden = false;
+  canvas.width = Math.floor(window.innerWidth * pixelRatio);
+  canvas.height = Math.floor(window.innerHeight * pixelRatio);
+  context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+
+  for (let i = 0; i < 150; i++) {
+    pieces.push({
+      x: Math.random() * window.innerWidth,
+      y: -20 - Math.random() * window.innerHeight * 0.35,
+      size: 5 + Math.random() * 7,
+      speed: 2.2 + Math.random() * 4,
+      drift: -1.5 + Math.random() * 3,
+      rotation: Math.random() * Math.PI,
+      rotationSpeed: -0.18 + Math.random() * 0.36,
+      color: colors[Math.floor(Math.random() * colors.length)]
+    });
+  }
+
+  function draw(now) {
+    const progress = Math.min(1, (now - startedAt) / duration);
+
+    context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+
+    pieces.forEach(piece => {
+      piece.x += piece.drift;
+      piece.y += piece.speed;
+      piece.rotation += piece.rotationSpeed;
+
+      context.save();
+      context.globalAlpha = 1 - Math.max(0, progress - 0.75) / 0.25;
+      context.translate(piece.x, piece.y);
+      context.rotate(piece.rotation);
+      context.fillStyle = piece.color;
+      context.fillRect(-piece.size / 2, -piece.size / 2, piece.size, piece.size * 0.55);
+      context.restore();
+    });
+
+    if (progress < 1) {
+      requestAnimationFrame(draw);
+    } else {
+      context.clearRect(0, 0, window.innerWidth, window.innerHeight);
+      canvas.hidden = true;
+    }
+  }
+
+  requestAnimationFrame(draw);
+}
+
+function handleLevelCompleted() {
+  launchConfetti();
+
+  sendStatsEvent("level_completed", {
+    categoryTitle: "",
+    firstCompletedCategory: getFirstCompletedCategory()
+  });
 }
 
 function saveState() {
@@ -1486,6 +2992,33 @@ function loadState() {
 
 function clearState() {
   localStorage.removeItem(STORAGE_KEY);
+}
+
+function setLevel(levelId) {
+  if (!LEVELS[levelId]) return;
+
+  currentLevelId = levelId;
+  localStorage.setItem("word-game-current-level", currentLevelId);
+  STORAGE_KEY = getCurrentLevel().storageKey;
+  categories = getCurrentLevel().categories;
+
+  selected = null;
+  shakingIds = [];
+  draggedGroupId = null;
+  dropTarget = null;
+
+  const loaded = loadState();
+  if (!loaded) {
+    createInitialGame();
+  }
+
+  render();
+}
+
+function updateLevelButtons() {
+  document.querySelectorAll(".level-btn").forEach(button => {
+    button.classList.toggle("active-level", button.dataset.level === currentLevelId);
+  });
 }
 
 /* =========================================
@@ -1584,6 +3117,7 @@ function renderRows() {
 
       const tile = document.createElement("div");
       tile.className = "tile";
+      tile.dataset.groupId = group.id;
 
       if (selected === group.id) {
         tile.classList.add("selected");
@@ -1593,17 +3127,84 @@ function renderRows() {
         tile.classList.add("completed");
       }
 
+      if (group.words.length > 1 && !group.completed) {
+        tile.classList.add("merged", "draggable");
+        tile.draggable = true;
+        tile.dataset.tooltip = getTooltipText(group);
+      }
+
+      if (draggedGroupId === group.id) {
+        tile.classList.add("dragging");
+      }
+
+      if (dropTarget && dropTarget.groupId === group.id) {
+        tile.classList.add(dropTarget.position === "before" ? "drop-before" : "drop-after");
+      }
+
       if (shakingIds.includes(group.id)) {
         tile.classList.add("shake");
       }
 
-      if (group.words.length > 1) {
-        tile.classList.add("merged");
-      }
-
       tile.innerHTML = getGroupText(group);
-      tile.title = getTooltipText(group);
       tile.onclick = () => clickGroup(group.id);
+
+      tile.addEventListener("dragstart", event => {
+        if (group.words.length <= 1 || group.completed) {
+          event.preventDefault();
+          return;
+        }
+
+        draggedGroupId = group.id;
+        selected = null;
+        document.body.classList.add("is-dragging");
+        tile.classList.add("dragging");
+        event.dataTransfer.effectAllowed = "move";
+        event.dataTransfer.setData("text/plain", group.id);
+        setCleanDragImage(event, tile);
+      });
+
+      tile.addEventListener("dragover", event => {
+        if (!draggedGroupId || draggedGroupId === group.id) return;
+
+        event.preventDefault();
+
+        const position = getDropPosition(event, tile);
+        dropTarget = { groupId: group.id, position };
+
+        document.querySelectorAll(".tile.drop-before, .tile.drop-after").forEach(el => {
+          el.classList.remove("drop-before", "drop-after");
+        });
+
+        tile.classList.add(position === "before" ? "drop-before" : "drop-after");
+      });
+
+      tile.addEventListener("dragleave", () => {
+        tile.classList.remove("drop-before", "drop-after");
+      });
+
+      tile.addEventListener("drop", event => {
+        if (!draggedGroupId || draggedGroupId === group.id) return;
+
+        event.preventDefault();
+
+        const groupToMove = draggedGroupId;
+        const targetGroupId = group.id;
+        const targetPosition = dropTarget ? dropTarget.position : "before";
+
+        draggedGroupId = null;
+        document.body.classList.remove("is-dragging");
+        clearDropTarget();
+        moveGroupNearTarget(groupToMove, targetGroupId, targetPosition);
+      });
+
+      tile.addEventListener("dragend", () => {
+        draggedGroupId = null;
+        document.body.classList.remove("is-dragging");
+        clearDropTarget();
+        document.querySelectorAll(".tile.dragging, .tile.drop-before, .tile.drop-after").forEach(el => {
+          el.classList.remove("dragging", "drop-before", "drop-after");
+        });
+      });
 
       rowEl.appendChild(tile);
     });
@@ -1622,6 +3223,7 @@ function render() {
   renderStats();
   renderCompleted();
   renderRows();
+  updateLevelButtons();
 }
 
 /* =========================================
@@ -1659,10 +3261,13 @@ function merge(a, b) {
     return;
   }
 
+  const mergedWords = [...A.words, ...B.words];
+  const categoryCompleted = mergedWords.length === SIZE;
+
   groups[b] = {
     ...B,
-    words: [...A.words, ...B.words],
-    completed: [...A.words, ...B.words].length === SIZE
+    words: mergedWords,
+    completed: categoryCompleted
   };
 
   delete groups[a];
@@ -1675,6 +3280,20 @@ function merge(a, b) {
 
   score++;
   saveState();
+  sendStatsEvent("connection");
+
+  if (categoryCompleted) {
+    const firstCompletedCategory = rememberFirstCompletedCategory(B.title);
+    sendStatsEvent("category_completed", {
+      categoryTitle: B.title,
+      firstCompletedCategory
+    });
+
+    if (completedIds.length === categories.length) {
+      handleLevelCompleted();
+    }
+  }
+
   render();
 }
 
@@ -1699,6 +3318,9 @@ function newGame() {
 }
 
 function init() {
+  categories = getCurrentLevel().categories;
+  STORAGE_KEY = getCurrentLevel().storageKey;
+
   validateData();
 
   const loaded = loadState();
@@ -1707,9 +3329,12 @@ function init() {
   }
 
   render();
+  sendStatsEvent("visit");
 }
 
 document.getElementById("newGameBtn").addEventListener("click", newGame);
+document.getElementById("level1Btn").addEventListener("click", () => setLevel("level1"));
+document.getElementById("level2Btn").addEventListener("click", () => setLevel("level2"));
 
 init();
 </script>
