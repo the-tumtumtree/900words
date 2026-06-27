@@ -2995,15 +2995,16 @@ function sendStatsEvent(eventType, extra = {}) {
   };
 
   try {
-    fetch(STATS_ENDPOINT, {
-      method: "POST",
-      mode: "no-cors",
-      keepalive: true,
-      headers: {
-        "Content-Type": "text/plain;charset=UTF-8"
-      },
-      body: JSON.stringify(payload)
-    }).catch(() => {});
+    const url = new URL(STATS_ENDPOINT);
+
+    Object.entries(payload).forEach(([key, value]) => {
+      url.searchParams.set(key, value == null ? "" : String(value));
+    });
+
+    url.searchParams.set("_", `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+
+    const beacon = new Image();
+    beacon.src = url.toString();
   } catch (e) {
     // Статистика не должна мешать игре.
   }
